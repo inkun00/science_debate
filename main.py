@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import json
-import pyperclip
 import time
 
 # Streamlit의 세션 상태를 사용하여 대화 내용을 저장
@@ -12,6 +11,8 @@ if "chat_history" not in st.session_state:
 if "input_message" not in st.session_state:
     st.session_state.input_message = ""
 
+if "copied_chat_history" not in st.session_state:
+    st.session_state.copied_chat_history = ""
 
 class CompletionExecutor:
     def __init__(self, host, api_key, api_key_primary_val, request_id):
@@ -101,13 +102,13 @@ st.markdown("""
     }
 
     .copy-button {
-        height: 38px;
-        width: 100px;
+        height: 100px;
+        width: 240px;
         padding: 0px 10px;
+        font-size: 32px;
     }
     </style>
 """, unsafe_allow_html=True)
-
 
 # 콜백 함수 정의
 def send_message():
@@ -129,18 +130,10 @@ def send_message():
         completion_executor.execute(completion_request)
         st.session_state.input_message = ""  # 입력 필드를 초기화합니다.
 
-
 def copy_chat_history():
     # 두 번째 메시지를 제외하고 대화 내용을 복사합니다.
     chat_history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.chat_history[2:]])
-    pyperclip.copy(chat_history_text)
-
-    # 성공 메시지를 표시하고 2초 후에 사라지게 합니다.
-    success_message = st.empty()
-    success_message.success("Chat history copied to clipboard!")
-    time.sleep(2)
-    success_message.empty()
-
+    st.session_state.copied_chat_history = chat_history_text
 
 # Display the chat history (excluding the first initial instruction)
 for message in st.session_state.chat_history[2:]:
@@ -180,4 +173,33 @@ with st.form(key="input_form", clear_on_submit=True):
     with cols[1]:
         submit_button = st.form_submit_button(label="입력", on_click=send_message)
     with cols[2]:
-        copy_button = st.form_submit_button(label="대화내용 복사", on_click=copy_chat_history)
+        copy_button = st.form_submit_button(label="대화내용 정리", on_click=copy_chat_history)
+
+# Display the copied chat history in a textbox at the bottom
+if st.session_state.copied_chat_history:
+    st.markdown("<h3>대화 내용 정리</h3>", unsafe_allow_html=True)
+    st.text_area("", value=st.session_state.copied_chat_history, height=200, key="copied_chat_history_text_area")
+
+    chat_history = st.session_state.copied_chat_history.replace("\n", "\\n").replace('"', '\\"')
+    st.components.v1.html(f"""
+        <textarea id="copied_chat_history_text_area" style="display:none;">{chat_history}</textarea>
+        <button onclick="copyToClipboard()" class="copy-button">클립보드로 복사</button>
+        <script>
+        function copyToClipboard() {{
+            var text = document.getElementById('copied_chat_history_text_area').value.replace(/\\\\n/g, '\\n');
+            navigator.clipboard.writeText(text).then(function() {{
+                alert('클립보드로 복사되었습니다!');
+            }}, function(err) {{
+                console.error('복사 실패: ', err);
+            }});
+        }}
+        </script>
+
+        <style>
+        .copy-button {{
+            height: 100%; /* 20% 높이 증가 */
+            width: 100%; /* 20% 너비 증가 */
+            font-size: 30px; /* 20% 텍스트 크기 증가 */
+        }}
+        </style>
+    """, height=100)
